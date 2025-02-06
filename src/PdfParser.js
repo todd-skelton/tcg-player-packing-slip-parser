@@ -54,6 +54,46 @@ const PDFParser = () => {
     setParsedData(orders);
   };
 
+  const exportToCSV = () => {
+    if (!parsedData) return;
+
+    const headers = [
+      "order.orderNumber",
+      "order.orderDate",
+      "order.totalQty",
+      "order.totalPrice",
+      "item.quantity",
+      "item.description",
+      "item.price",
+      "item.totalPrice",
+    ];
+    const rows = parsedData.flatMap((order) =>
+      order.items.map((item) => [
+        order.orderNumber,
+        order.orderDate,
+        order.totalQty,
+        order.totalPrice,
+        item.quantity,
+        item.description,
+        item.price,
+        item.totalPrice,
+      ])
+    );
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `parsedPackingSlip-${Number(new Date())}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const processOrderText = (orderText) => {
     console.log(orderText);
     // Locate the start of the items section
@@ -86,52 +126,60 @@ const PDFParser = () => {
 
     // Regex for extracting items
     const itemRegex =
-      /(\d+)\s+((?:.*?(?:\n|$))+?)\s*\$(\d+\.\d{2})\s*\$(\d+\.\d{2})/g;
+      /(\d+)\s+((?:(?!Quantity\s+Description\s+Price\s+Total Price)[\s\S])*?)\s*\$(\d+\.\d{2})\s*\$(\d+\.\d{2})/g;
 
     const items = [];
     let match;
-
     while ((match = itemRegex.exec(itemsSection)) !== null) {
+      const [_, quantity, description, price, totalPrice] = match;
       items.push({
-        quantity: parseInt(match[1]),
-        description: match[2].replace(/\n/g, " ").trim(),
-        price: parseFloat(match[3]),
-        totalPrice: parseFloat(match[4]),
+        quantity: parseInt(quantity, 10),
+        description: description.trim(),
+        price: parseFloat(price),
+        totalPrice: parseFloat(totalPrice),
       });
     }
 
-    // Regex for extracting totals
+    // Regex for extracting total quantity and total price
     const totalQtyRegex = /(\d+)\s+Total/;
     const totalPriceRegex = /Total\s+\$(\d+\.\d{2})/;
 
     const totalQtyMatch = orderText.match(totalQtyRegex);
     const totalPriceMatch = orderText.match(totalPriceRegex);
 
+    const totalQty = totalQtyMatch ? parseInt(totalQtyMatch[1], 10) : 0;
+    const totalPrice = totalPriceMatch ? parseFloat(totalPriceMatch[1]) : 0;
+
     return {
       orderNumber,
       orderDate,
-      totalQty: totalQtyMatch ? parseInt(totalQtyMatch[1]) : 0,
-      totalPrice: totalPriceMatch ? parseFloat(totalPriceMatch[1]) : 0,
+      totalQty,
+      totalPrice,
       items,
     };
   };
 
   return (
-    <div>
+    <>
       <h1>PDF Parser</h1>
-      <input
-        type="file"
-        accept="application/pdf"
-        onChange={(e) => {
-          if (e.target.files[0]) parsePDF(e.target.files[0]);
-        }}
-      />
+      <p>
+        <input
+          type="file"
+          accept="application/pdf"
+          onChange={(e) => {
+            if (e.target.files[0]) parsePDF(e.target.files[0]);
+          }}
+        />
+      </p>
       {parsedData && (
-        <pre style={{ textAlign: "left" }}>
-          {JSON.stringify(parsedData, null, 2)}
-        </pre>
+        <p>
+          <button onClick={exportToCSV}>Export to CSV</button>
+          <pre style={{ textAlign: "left" }}>
+            {JSON.stringify(parsedData, null, 2)}
+          </pre>
+        </p>
       )}
-    </div>
+    </>
   );
 };
 
