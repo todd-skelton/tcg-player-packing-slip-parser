@@ -9,49 +9,55 @@ GlobalWorkerOptions.workerSrc = new URL(
 const PDFParser = () => {
   const [parsedData, setParsedData] = useState(null);
 
-  const parsePDF = async (file) => {
-    const pdf = await getDocument(await file.arrayBuffer()).promise;
+  const parsePDF = async (files) => {
+    let combinedOrders = [];
 
-    let orders = [];
-    let currentOrderText = "";
-    let currentOrderNumber = null;
-    const orderStartRegex = /Order Number:\s*(\S+)/;
+    for (const file of files) {
+      const pdf = await getDocument(await file.arrayBuffer()).promise;
 
-    for (let i = 0; i < pdf.numPages; i++) {
-      const page = await pdf.getPage(i + 1);
-      const textContent = await page.getTextContent();
-      const extractedText = textContent.items
-        .map((item) => item.str)
-        .join("\n");
+      let orders = [];
+      let currentOrderText = "";
+      let currentOrderNumber = null;
+      const orderStartRegex = /Order Number:\s*(\S+)/;
 
-      // Check if the page starts a new order
-      const orderNumberMatch = extractedText.match(orderStartRegex);
-      if (orderNumberMatch) {
-        const foundOrderNumber = orderNumberMatch[1];
+      for (let i = 0; i < pdf.numPages; i++) {
+        const page = await pdf.getPage(i + 1);
+        const textContent = await page.getTextContent();
+        const extractedText = textContent.items
+          .map((item) => item.str)
+          .join("\n");
 
-        if (currentOrderNumber && currentOrderNumber !== foundOrderNumber) {
-          // Process the current order if the number changes
-          const parsedOrder = processOrderText(currentOrderText);
-          orders.push(parsedOrder);
-          currentOrderText = "";
+        // Check if the page starts a new order
+        const orderNumberMatch = extractedText.match(orderStartRegex);
+        if (orderNumberMatch) {
+          const foundOrderNumber = orderNumberMatch[1];
+
+          if (currentOrderNumber && currentOrderNumber !== foundOrderNumber) {
+            // Process the current order if the number changes
+            const parsedOrder = processOrderText(currentOrderText);
+            orders.push(parsedOrder);
+            currentOrderText = "";
+          }
+
+          currentOrderNumber = foundOrderNumber;
         }
 
-        currentOrderNumber = foundOrderNumber;
+        // Append the current page to the ongoing order
+        currentOrderText += `\n${extractedText}`;
       }
 
-      // Append the current page to the ongoing order
-      currentOrderText += `\n${extractedText}`;
+      // Process the last order
+      if (currentOrderText) {
+        const parsedOrder = processOrderText(currentOrderText);
+        orders.push(parsedOrder);
+      }
+
+      combinedOrders = [...combinedOrders, ...orders];
     }
 
-    // Process the last order
-    if (currentOrderText) {
-      const parsedOrder = processOrderText(currentOrderText);
-      orders.push(parsedOrder);
-    }
+    console.log(combinedOrders);
 
-    console.log(orders);
-
-    setParsedData(orders);
+    setParsedData(combinedOrders);
   };
 
   const exportToCSV = () => {
@@ -134,7 +140,7 @@ const PDFParser = () => {
       const [_, quantity, description, price, totalPrice] = match;
       items.push({
         quantity: parseInt(quantity, 10),
-        description: description.trim(),
+        description: `"${description.replaceAll("\n", " ").trim()}"`,
         price: parseFloat(price),
         totalPrice: parseFloat(totalPrice),
       });
@@ -166,8 +172,9 @@ const PDFParser = () => {
         <input
           type="file"
           accept="application/pdf"
+          multiple
           onChange={(e) => {
-            if (e.target.files[0]) parsePDF(e.target.files[0]);
+            if (e.target.files.length) parsePDF(e.target.files);
           }}
         />
       </p>
