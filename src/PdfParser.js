@@ -77,7 +77,7 @@ const PDFParser = () => {
         order.totalQty,
         order.totalPrice,
         item.quantity,
-        item.description,
+        `"${item.description}"`,
         item.price,
         item.totalPrice,
       ])
@@ -137,7 +137,7 @@ const PDFParser = () => {
       const [_, quantity, description, price, totalPrice] = match;
       items.push({
         quantity: parseInt(quantity, 10),
-        description: `"${description.replaceAll("\n", " ").trim()}"`,
+        description: description.replaceAll("\n", " ").trim(),
         price: parseFloat(price),
         totalPrice: parseFloat(totalPrice),
       });
